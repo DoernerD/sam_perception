@@ -1,89 +1,119 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+"""
+Perception Node to run feature detection and estimation during docking.
+"""
+
+import os
+import time
 import cv2 as cv
 from cv_bridge import CvBridge, CvBridgeError
-#import roslib
+
+import rospkg
 import rospy
 import tf.msg
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseArray
-from nav_msgs.msg import Path
 from std_msgs.msg import Float32
-import time
+
 import numpy as np
-import itertools
-import matplotlib.pyplot as plt
 
-from lolo_perception.feature_extraction import featureAssociation, AdaptiveThreshold2, AdaptiveThresholdPeak
-from lolo_perception.pose_estimation import DSPoseEstimator
-from lolo_perception.perception_utils import plotPoseImageInfo
-from lolo_perception.perception_ros_utils import vectorToPose, vectorToTransform, poseToVector, lightSourcesToMsg, featurePointsToMsg
-from lolo_perception.perception import Perception
+from sam_perception.perception_ros_utils import vectorToPose, vectorToTransform, poseToVector, lightSourcesToMsg, featurePointsToMsg
+from sam_perception.perception import Perception
+from sam_perception.feature_model import FeatureModel
+from sam_perception.camera_model import Camera
 
-class PerceptionNode:
-    def __init__(self, featureModel, hz, cvShow=False, hatsMode="valley"):
-        print("Perception Node Lolo Package")
-        self.cameraTopic = "lolo_camera"
-        self.cameraInfoSub = rospy.Subscriber("lolo_camera/camera_info", CameraInfo, self._getCameraCallback)
+
+
+class PerceptionNode(object):
+    """
+    Node to interact with the perception algorithms.
+    Publishes an estimated pose of the docking station
+    """
+    def __init__(self):
+        # Read external parameters
+        feature_model_yaml = rospy.get_param("~feature_model_yaml")
+        self.hz = rospy.get_param("~hz")
+        self.cv_show = rospy.get_param("~cv_show", False)
+        hats_mode = rospy.get_param("~hats_mode", "valley")
+
+        feature_model_yaml_path = os.path.join(rospkg.RosPack().get_path("sam_perception"),
+                                               "feature_models/{}".format(feature_model_yaml))
+        feature_model = FeatureModel.fromYaml(feature_model_yaml_path)
+
         self.camera = None
+        self.image_msg = None
+        self.bridge = CvBridge()
+        self.camera_pose_vector = None  # This is some legacy code, needed for the perception, but never changed.
+        self.estimated_ds_pose = None
+        self.got_image = False
+        self.got_camera_pose = False
+
+        self.processed_image_drawing = Image()
+        self.processed_image = Image()
+        self.pose_image = Image()
+
+        # Return values from the perception module
+        self.processed_img = None
+        self.pose_img = None
+
+        # Initialize cameras. Has to be done before everything else.
+        self.camera_info_topic = rospy.get_param("~camera_info_topic")
+        self.camera_info_sub = rospy.Subscriber(self.camera_info_topic, CameraInfo, 
+                                                self.camera_info_cb)
+
         while not rospy.is_shutdown() and self.camera is None:
             print("Waiting for camera info to be published")
             rospy.sleep(1)
 
-        print("[PNode] after while")
-        self.hz = hz
-        self.cvShow = cvShow
+        self.perception = Perception(self.camera, feature_model, hatsMode=hats_mode)
 
-        self.perception = Perception(self.camera, featureModel, hatsMode=hatsMode)
+        # Topics
+        self.image_topic = rospy.get_param("~image_topic")
+        self.image_processed_topic = rospy.get_param("~image_processed_topic")
+        self.image_processed_drawing_topic = rospy.get_param("~image_processed_drawing_topic")
+        self.image_pose_topic = rospy.get_param("~image_pose_topic")
+        self.associated_image_points_topic = rospy.get_param("~associated_image_points_topic")
+        self.estimated_pose_topic = rospy.get_param("~estimated_pose_topic")
+        self.estimated_camera_pose_topic = rospy.get_param("~estimated_camera_pose_topic")
+        self.mahal_distance_topic = rospy.get_param("~mahal_distance_topic")
+        self.estimated_poses_array_topic = rospy.get_param("~estimated_poses_array_topic")   # FIXME: What's the difference to estimated_pose_topic?
 
-        self.imageMsg = None
-        self.bridge = CvBridge()
+        # Subscribers
+        rospy.Subscriber(self.image_topic, Image, self.image_cb)
 
-        # FIXME(aldoteran): gonna switch btwn images till we find the station.
-        self.right_image_topic = rospy.get_param("~right_image_topic")
-        self.left_image_topic = rospy.get_param("~left_image_topic")
-        self.front_image_topic = rospy.get_param("~front_image_topic")
-        # Start with right camera.
-        self.imgSubscriber = rospy.Subscriber(self.right_image_topic, Image, self._imgCallback)
-        # Flag to know whether its the right camera we're using/
-        self.is_right_image = True
+        # Publishers
+        self.image_processed_pub = rospy.Publisher(self.image_processed_topic, Image, queue_size=1)
+        self.image_processed_drawing_pub = rospy.Publisher(self.image_processed_drawing_topic, Image, queue_size=1)
+        self.image_pose_pub = rospy.Publisher(self.image_pose_topic, Image, queue_size=1)
+        self.associated_image_points_pub = rospy.Publisher(self.associated_image_points_topic, PoseArray, queue_size=1) #TODO: rename this. It's a pose array and the name is misleading.
+        self.estimated_pose_pub = rospy.Publisher(self.estimated_pose_topic, PoseWithCovarianceStamped, queue_size=1)
+        self.estimated_camera_pose_pub = rospy.Publisher(self.estimated_camera_pose_topic, PoseWithCovarianceStamped, queue_size=10)
+        self.mahal_distance_pub = rospy.Publisher(self.mahal_distance_topic, Float32, queue_size=1)
+        self.estimated_poses_array_pub = rospy.Publisher(self.estimated_poses_array_topic, PoseArray, queue_size=1)
 
-        # publish some images for visualization
-        self.imgProcPublisher = rospy.Publisher('lolo_camera/image_processed', Image, queue_size=1)
-        self.imgProcDrawPublisher = rospy.Publisher('lolo_camera/image_processed_draw', Image, queue_size=1)
-        self.imgPosePublisher = rospy.Publisher('lolo_camera/image_processed_pose', Image, queue_size=1)
-
-        # publish associated light source image points as a PoseArray
-        self.associatedImagePointsPublisher = rospy.Publisher('lolo_camera/associated_image_points', PoseArray, queue_size=1)
-
-        # publish estimated pose
-        self.posePublisher = rospy.Publisher('docking_station/feature_model/estimated_pose', PoseWithCovarianceStamped, queue_size=1)
-        self.camPosePublisher = rospy.Publisher('lolo_camera/estimated_pose', PoseWithCovarianceStamped, queue_size=10)
-        self.mahalanobisDistPub = rospy.Publisher('docking_station/feature_model/estimated_pose/maha_dist', Float32, queue_size=1)
-
-        # publish transform of estimated pose
+        # FIXME: This doesn't seem good to publish.
         self.transformPublisher = rospy.Publisher("/tf", tf.msg.tfMessage, queue_size=1)
 
-        # publish placement of the light sources as a PoseArray (published in the docking_station frame)
-        self.featurePosesPublisher = rospy.Publisher('docking_station/feature_model/estimated_poses', PoseArray, queue_size=1)
+        rate = rospy.Rate(self.hz)
 
-        # sed in perception.py to update the estimated pose (estDSPose) for better prediction of the ROI
-        self._cameraPoseMsg = None
-        self.cameraPoseSub = rospy.Subscriber("lolo/camera/pose", PoseWithCovarianceStamped, self._cameraPoseSub)
-        self.imgSubscriber = rospy.Subscriber(self.front_image_topic,
-                                             Image, self._imgCallback)
-        self.camera_frame_id = "sam/camera_front_link"
-        # FIXME(aldoteran): track the current frame_id being used.
-        # self.camera_frame_id = "sam/camera_front_right_link/perception"
+        # Run
+        while not rospy.is_shutdown():
+            self.run_perception()
 
-        print("[PNode] end init")
+            self.transform_images()
 
-    def _getCameraCallback(self, msg):
+            self.publish_messages()
+
+
+            rate.sleep()
+
+    #region Callbacks
+    def camera_info_cb(self, msg):
         """
         Use either K and D or just P
         https://answers.ros.org/question/119506/what-does-projection-matrix-provided-by-the-calibration-represent/
         https://github.com/dimatura/ros_vimdoc/blob/master/doc/ros-camera-info.txt
         """
-        from lolo_perception.camera_model import Camera
         # Using only P (D=0), we should subscribe to the rectified image topic
         # camera = Camera(cameraMatrix=np.array(msg.P, dtype=np.float32).reshape((3,4))[:, :3],
                         # distCoeffs=np.zeros((1,4), dtype=np.float32),
@@ -95,215 +125,148 @@ class PerceptionNode:
         self.camera = camera
 
         # We only want one message
-        self.cameraInfoSub.unregister()
-
-    def _imgCallback(self, msg):
-        self.imageMsg = msg
-
-    def _cameraPoseSub(self, msg):
-        self._cameraPoseMsg = msg
-
-    def update(self,
-               imgColor,
-               estDSPose=None,
-               publishPose=True,
-               publishCamPose=False,
-               publishImages=True):
-
-        # TODO: move this to run()?
-        cameraPoseVector = None
-        if self._cameraPoseMsg:
-            t, r = poseToVector(self._cameraPoseMsg)
-            #t *= 0 # we disregard translation, ds has to be estimated
-            cameraPoseVector = np.array(list(t) + list(r))
-            self._cameraPoseMsg = None
+        self.camera_info_sub.unregister()
 
 
+
+    def image_cb(self, msg):
+        """
+        Callback for the image topic.
+        """
+        self.image_msg = msg
+        self.got_image = True
+
+    #endregion
+
+    def run_perception(self):
+        """
+        Main loop for the perception node
+        The if-statement is to ensure that we only run it when we have a new image.
+        """
+        if self.got_image:
+            try:
+                image_mat = self.bridge.imgmsg_to_cv2(self.image_msg, 'bgr8')
+            except CvBridgeError as error_msg:
+                print(error_msg)
+            else:
+                (ds_pose, pose_aquired) = self.update(image_mat, self.estimated_ds_pose)
+
+                # FIXME: Can you do that with an try-assert?
+                # Or put that in the update function itself or so.
+                # Bit weird with the circle of estimated_ds_pose
+                if not pose_aquired:
+                    self.estimated_ds_pose = None
+                else:
+                    self.estimated_ds_pose = ds_pose
+
+        self.got_image = False
+
+
+    def update(self, img_mat, estimated_ds_pose):
+        """
+        FIXME: Lots of stuff happening here. 
+        - Extract the publishing into an individual function
+        - take care of all the function arguments.
+        - formatting in general. 
+        """
         start = time.time()
 
-        (dsPose,
-         poseAquired,
-         candidates,
-         processedImg,
-         poseImg) = self.perception.estimatePose(imgColor,
-                                                 estDSPose,
-                                                 estCameraPoseVector=cameraPoseVector)
+        (ds_pose, pose_aquired, candidates,
+         self.processed_img, self.pose_img) = self.perception.estimatePose(img_mat, estimated_ds_pose,
+                                                                 self.camera_pose_vector)
 
-        if dsPose and dsPose.covariance is None:
-            dsPose.calcCovariance()
+        if ds_pose and ds_pose.covariance is None:
+            ds_pose.calcCovariance()
 
-        elapsed = time.time() - start
-        virtualHZ = 1./elapsed
-        hz = min(self.hz, virtualHZ)
+        elapsed = time.time() - start   # FIXME: Dangerous, could be zero...
+        virtual_frequency = 1./elapsed
+        hz = min(self.hz, virtual_frequency)
 
-        cv.putText(poseImg,
-                   "FPS {}".format(round(hz, 1)),
-                   (int(poseImg.shape[1]*4/5), 25),
-                   cv.FONT_HERSHEY_SIMPLEX,
-                   0.7,
-                   color=(0,255,0),
-                   thickness=2,
-                   lineType=cv.LINE_AA)
+        cv.putText(self.pose_img, "FPS {}".format(round(hz, 1)),
+                   (int(self.pose_img.shape[1]*4/5), 25), cv.FONT_HERSHEY_SIMPLEX, 0.7,
+                   color=(0,255,0), thickness=2, lineType=cv.LINE_AA)
 
-        cv.putText(poseImg,
-                   "Virtual FPS {}".format(round(virtualHZ, 1)),
-                   (int(poseImg.shape[1]*4/5), 45),
-                   cv.FONT_HERSHEY_SIMPLEX,
-                   0.7,
-                   color=(0,255,0),
-                   thickness=2,
-                   lineType=cv.LINE_AA)
+        cv.putText(self.pose_img, "Virtual FPS {}".format(round(virtual_frequency, 1)),
+                   (int(self.pose_img.shape[1]*4/5), 45), cv.FONT_HERSHEY_SIMPLEX, 0.7,
+                   color=(0,255,0), thickness=2, lineType=cv.LINE_AA)
 
-        timeStamp = rospy.Time.now()
+        time_stamp = rospy.Time.now()
+
+
         # publish pose if pose has been aquired
-        if publishPose and poseAquired and dsPose.detectionCount >= 10: # TODO: set to 10
+
+        self.processed_image_drawing = self.bridge.cv2_to_imgmsg(self.processed_img)
+        self.pose_image = self.bridge.cv2_to_imgmsg(self.pose_img)
+        self.processed_image = self.bridge.cv2_to_imgmsg(self.perception.featureExtractor.img)
+
+        # FIXME: Check the if conditions, esp. the detection count. Might be good to reduce them.
+        # TODO: Put al of this into the publishing function
+        # TODO: put the conversion into an extra function, too.
+        if pose_aquired and ds_pose.detectionCount >= 10:
             # publish transform
-            # dsTransform = vectorToTransform(self.camera_frame_id,
-            dsTransform = vectorToTransform(self.imageMsg.header.frame_id + "/perception",
+            ds_transform = vectorToTransform(self.image_msg.header.frame_id + "/perception",
                                             "docking_station_link",
-                                            dsPose.translationVector,
-                                            dsPose.rotationVector,
-                                            timeStamp=timeStamp)
-            self.transformPublisher.publish(tf.msg.tfMessage([dsTransform]))
+                                            ds_pose.translationVector,
+                                            ds_pose.rotationVector,
+                                            timeStamp=time_stamp)
+            self.transformPublisher.publish(tf.msg.tfMessage([ds_transform]))
 
             # Publish placement of the light sources as a PoseArray (published in the docking_station frame)
-            pArray = featurePointsToMsg("docking_station_link", self.perception.featureModel.features, timeStamp=timeStamp)
-            self.featurePosesPublisher.publish(pArray)
+            pose_array = featurePointsToMsg("docking_station_link", self.perception.featureModel.features, timeStamp=time_stamp)
+            self.estimated_poses_array_pub.publish(pose_array)
 
             # publish estimated pose
-            self.posePublisher.publish(
-                vectorToPose(self.imageMsg.header.frame_id,
-                dsPose.translationVector,
-                dsPose.rotationVector,
-                dsPose.covariance,
-                timeStamp=timeStamp)
-                )
+            self.estimated_pose_pub.publish(
+                vectorToPose(self.image_msg.header.frame_id,
+                ds_pose.translationVector,
+                ds_pose.rotationVector,
+                ds_pose.covariance,
+                timeStamp=time_stamp))
+            
             # publish mahalanobis distance
-            if not dsPose.mahaDist and estDSPose:
-                dsPose.calcMahalanobisDist(estDSPose)
-                self.mahalanobisDistPub.publish(Float32(dsPose.mahaDist))
+            if not ds_pose.mahaDist and estimated_ds_pose:
+                ds_pose.calcMahalanobisDist(estimated_ds_pose)
+                self.mahal_distance_pub.publish(Float32(ds_pose.mahaDist))
 
-            if publishCamPose:
-                # print("!!!Publishing cam pose with covariance!!!")
-                self.camPosePublisher.publish(
-                    vectorToPose("docking_station_link",
-                    dsPose.camTranslationVector,
-                    dsPose.camRotationVector,
-                    dsPose.calcCamPoseCovariance(),
-                    timeStamp=timeStamp)
-                    )
+            self.estimated_camera_pose_pub.publish(
+                vectorToPose("docking_station_link",
+                ds_pose.camTranslationVector,
+                ds_pose.camRotationVector,
+                ds_pose.calcCamPoseCovariance(),
+                timeStamp=time_stamp))
 
-        if publishImages:
-            self.imgProcDrawPublisher.publish(self.bridge.cv2_to_imgmsg(processedImg))
-            self.imgProcPublisher.publish(self.bridge.cv2_to_imgmsg(self.perception.featureExtractor.img))
-            #if dsPose:
-            self.imgPosePublisher.publish(self.bridge.cv2_to_imgmsg(poseImg))
-
-        if dsPose:
+             
+        if ds_pose:
             # if the light source candidates have been associated, we pusblish the associated candidates
-            self.associatedImagePointsPublisher.publish(lightSourcesToMsg(dsPose.associatedLightSources, timeStamp=timeStamp))
+            self.associated_image_points_pub.publish(lightSourcesToMsg(ds_pose.associatedLightSources, timeStamp=time_stamp))
         else:
             # otherwise we publish all candidates
-            self.associatedImagePointsPublisher.publish(lightSourcesToMsg(candidates, timeStamp=timeStamp))
+            self.associated_image_points_pub.publish(lightSourcesToMsg(candidates, timeStamp=time_stamp))
 
-        # FIXME(aldot): Switch camera if no detection was done.
-        if not poseAquired:
-            # Unregister and resubscribe to other image topic.
-            self.imgSubscriber.unregister()
-            if self.is_right_image:
-                rospy.loginfo("Could not find DS on right camera, switching to left...")
-                self.imgSubscriber = rospy.Subscriber(self.left_image_topic,
-                                             Image, self._imgCallback)
-                self.camera_frame_id = "sam/camera_front_left_link/perception"
-                self.is_right_image = False
-            else:
-                rospy.loginfo("Could not find DS on left camera, switching to right...")
-                self.imgSubscriber = rospy.Subscriber(self.right_image_topic,
-                                             Image, self._imgCallback)
-                self.camera_frame_id = "sam/camera_front_right_link/perception"
-                self.is_right_image = True
+        return ds_pose, pose_aquired
+    
+    def transform_images(self):
+        """
+        Convert all images into publishable formats.
+        FIXME: Might not use this one
+        """
+        pass
 
-        return dsPose, poseAquired, candidates
 
-    def run(self, poseFeedback=True, publishPose=True, publishCamPose=False, publishImages=True):
-        rate = rospy.Rate(self.hz)
-        # currently estimated docking station pose
-        # send the pose as an argument in update
-        # for the feature extraction to consider only a region of interest
-        # near the estimated pose
-        estDSPose = None
-
-        while not rospy.is_shutdown():
-            
-            if self.imageMsg:
-                try:
-                    imgColor = self.bridge.imgmsg_to_cv2(self.imageMsg, 'bgr8')
-                except CvBridgeError as e:
-                    print(e)
-                else:
-                    if not poseFeedback:
-                        estDSPose = None
-
-                    (dsPose,
-                     poseAquired,
-                     candidates) = self.update(imgColor,
-                                                estDSPose=estDSPose,
-                                                publishPose=publishPose,
-                                                publishCamPose=publishCamPose,
-                                                publishImages=publishImages)
-                    self.imageMsg = None
-
-                    if not poseAquired:
-                        estDSPose = None
-                    else:
-                        estDSPose = dsPose
-
-            if self.cvShow:
-                show = False
-                if self.perception.poseImg is not None:
-                    show = True
-
-                    img = self.perception.poseImg
-                    if img.shape[0] > 720:
-                        cv.resize(img, (1280,720))
-                    cv.imshow("pose image", img)
-
-                if self.perception.processedImg is not None:
-                    show = True
-
-                    img = self.perception.processedImg
-                    if img.shape[0] > 720:
-                        cv.resize(img, (1280,720))
-                    cv.imshow("processed image", img)
-
-                if show:
-                    cv.waitKey(1)
-
-            rate.sleep()
+    def publish_messages(self):
+        """
+        Collect all messages and publish them
+        """
+        # TODO: separate the conversion
+        self.image_processed_drawing_pub.publish(self.processed_image_drawing)
+        self.image_processed_pub.publish(self.processed_image)
+        self.image_pose_pub.publish(self.pose_image)
 
 
 if __name__ == '__main__':
-    from lolo_perception.feature_model import FeatureModel
-    import os
-    import rospkg
-    import argparse
+
     rospy.init_node('perception_node')
-
-    #parser = argparse.ArgumentParser(description='Perception node')
-    #parser.add_argument('-feature_model_yaml', type=str, default="big_prototype_5.yaml",
-    #                    help='')""
-
-    #args = parser.parse_args()
-
-    featureModelYaml = rospy.get_param("~feature_model_yaml")
-    hz = rospy.get_param("~hz")
-    cvShow = rospy.get_param("~cv_show")
-    publishCamPose = rospy.get_param("~publish_cam_pose")
-    hatsMode = rospy.get_param("~hats_mode")
-    poseFeedBack = rospy.get_param("~pose_feedback")
-    #featureModelYaml = args.feature_model_yaml
-    featureModelYamlPath = os.path.join(rospkg.RosPack().get_path("lolo_perception"), "feature_models/{}".format(featureModelYaml))
-    featureModel = FeatureModel.fromYaml(featureModelYamlPath)
-
-    perception = PerceptionNode(featureModel, hz, cvShow=cvShow, hatsMode=hatsMode)
-    perception.run(poseFeedback=poseFeedBack, publishPose=True, publishCamPose=publishCamPose, publishImages=True)
+    try:
+        PerceptionNode()
+    except rospy.ROSInterruptException:
+        rospy.logerr("Couldn't launch perception node")

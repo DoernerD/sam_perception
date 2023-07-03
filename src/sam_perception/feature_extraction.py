@@ -8,7 +8,7 @@ from scipy import signal
 import rospy
 from sensor_msgs.msg import Image
 import itertools
-from lolo_perception.perception_utils import plotHistogram, regionOfInterest
+from sam_perception.perception_utils import plotHistogram, regionOfInterest
 
 class PercentageThreshold:
     def __init__(self, p, thresholdType=cv.THRESH_BINARY):

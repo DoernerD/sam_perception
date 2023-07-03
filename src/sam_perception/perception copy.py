@@ -5,9 +5,9 @@ import numpy as np
 import itertools
 from scipy.spatial.transform import Rotation as R
 
-from lolo_perception.feature_extraction import featureAssociation, regionOfInterest, LightSourceTrackInitializer, AdaptiveThreshold2, AdaptiveThresholdPeak
-from lolo_perception.pose_estimation import DSPoseEstimator, calcMahalanobisDist
-from lolo_perception.perception_utils import plotPoseImageInfo
+from sam_perception.feature_extraction import featureAssociation, regionOfInterest, LightSourceTrackInitializer, AdaptiveThreshold2, AdaptiveThresholdPeak
+from sam_perception.pose_estimation import DSPoseEstimator, calcMahalanobisDist
+from sam_perception.perception_utils import plotPoseImageInfo
 
 class Perception:
     def __init__(self, camera, featureModel):

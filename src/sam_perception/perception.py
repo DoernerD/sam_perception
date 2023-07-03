@@ -1,12 +1,14 @@
+#!/usr/bin/env python3
+import itertools
+
 import cv2 as cv
 import time
 import numpy as np
-import itertools
 from scipy.spatial.transform import Rotation as R
 
-from lolo_perception.feature_extraction import featureAssociation, featureAssociationSquare, featureAssociationSquareImproved, localMax, refineCentroidGradient, LightSourceTrackInitializer, AdaptiveThreshold2, AdaptiveThresholdPeak, ModifiedHATS, LocalMaxHATS
-from lolo_perception.pose_estimation import DSPoseEstimator, calcMahalanobisDist
-from lolo_perception.perception_utils import plotPoseImageInfo, regionOfInterest
+from sam_perception.feature_extraction import featureAssociation, featureAssociationSquare, featureAssociationSquareImproved, localMax, refineCentroidGradient, LightSourceTrackInitializer, AdaptiveThreshold2, AdaptiveThresholdPeak, ModifiedHATS, LocalMaxHATS
+from sam_perception.pose_estimation import DSPoseEstimator, calcMahalanobisDist
+from sam_perception.perception_utils import plotPoseImageInfo, regionOfInterest
 
 class AssociateCombinationGenerator:
     def __init__(self, lsCombs, associateFunc):
@@ -138,7 +140,7 @@ class Perception:
         self.startStage = 4 # 1 or 4
         self.stage = self.startStage
         self.stage2Iterations = 15#15 # Tracking light sources for this amount of frames
-        self.stage4Iterations = 10 # Acquiring pose for this amount of frames
+        self.stage4Iterations = 1 # Acquiring pose for this amount of frames
 
         # Access images from perception_node
         self.processedImg = None

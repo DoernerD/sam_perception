@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 pointgrey_camera_driver (at least the version installed with apt-get) doesn't

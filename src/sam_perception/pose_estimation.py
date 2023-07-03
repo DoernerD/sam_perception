@@ -7,12 +7,12 @@ from mpl_toolkits import mplot3d
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 import scipy
-from lolo_perception.perception_utils import projectPoints, reprojectionError
-from lolo_perception.feature_extraction import featureAssociation
+from sam_perception.perception_utils import projectPoints, reprojectionError
+from sam_perception.feature_extraction import featureAssociation
 
 
-from lolo_perception.reprojection_utils import calcPoseReprojectionRMSEThreshold, calcPoseReprojectionThresholds
-from lolo_perception.pose_estimation_utils import lmSolve, interactionMatrix
+from sam_perception.reprojection_utils import calcPoseReprojectionRMSEThreshold, calcPoseReprojectionThresholds
+from sam_perception.pose_estimation_utils import lmSolve, interactionMatrix
 
 from numpy.linalg import lapack_lite
 #lapack_routine = lapack_lite.dgesv
@@ -735,7 +735,7 @@ class DSPoseEstimator:
 
 if __name__ =="__main__":
     from lolo_simulation.coordinate_system import CoordinateSystemArtist, CoordinateSystem
-    from lolo_perception.perception_utils import plotAxis
+    from sam_perception.perception_utils import plotAxis
     class CameraDummy:
         def __init__(self, cameraMatrix):
             self.cameraMatrix = cameraMatrix

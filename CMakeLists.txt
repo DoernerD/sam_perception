@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(lolo_perception)
+project(sam_perception)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -170,10 +170,10 @@ target_link_libraries(image_throttler ${catkin_LIBRARIES})
 #   scripts/my_python_script
 #   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 # )
-catkin_install_python(PROGRAMS nodes/perception_node.py
-  nodes/path_publisher_node.py nodes/camera_info_publisher.py 
-  nodes/image_analyze_node.py nodes/image_throttler.cpp 
-                      DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+# catkin_install_python(PROGRAMS nodes/perception_node.py
+#   nodes/path_publisher_node.py nodes/camera_info_publisher.py 
+#   nodes/image_analyze_node.py nodes/image_throttler.cpp 
+#                       DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 
 ## Mark executables for installation
@@ -203,14 +203,14 @@ catkin_install_python(PROGRAMS nodes/perception_node.py
 #   # myfile2
 #   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 # )
-install(FILES
-  feature_models/visual_docking_station.yaml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/feature_models
-)
-install(DIRECTORY launch/
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
-  PATTERN ".svn" EXCLUDE
-)
+# install(FILES
+#   feature_models/visual_docking_station.yaml
+#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/feature_models
+# )
+# install(DIRECTORY launch/
+#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+#   PATTERN ".svn" EXCLUDE
+# )
 
 
 #############
