@@ -13,11 +13,11 @@ import rospy
 import tf.msg
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseArray
-from std_msgs.msg import Float32
+from std_msgs.msg import Float64
 
 import numpy as np
 
-from sam_perception.perception_ros_utils import vectorToPose, vectorToTransform, poseToVector, lightSourcesToMsg, featurePointsToMsg
+from sam_perception.perception_ros_utils import vectorToPose, vectorToTransform, lightSourcesToMsg, featurePointsToMsg
 from sam_perception.perception import Perception
 from sam_perception.feature_model import FeatureModel
 from sam_perception.camera_model import Camera
@@ -43,14 +43,22 @@ class PerceptionNode(object):
         self.camera = None
         self.image_msg = None
         self.bridge = CvBridge()
-        self.camera_pose_vector = None  # This is some legacy code, needed for the perception, but never changed.
+        self.camera_pose_vector = None  # This is some legacy code, needed, but stays none.
         self.estimated_ds_pose = None
         self.got_image = False
         self.got_camera_pose = False
+        self.estimation_error = 0.
+        self.time_stamp = rospy.Time.now()
+        self.pose_aquired = False
 
+        # Messages to be published
         self.processed_image_drawing = Image()
         self.processed_image = Image()
         self.pose_image = Image()
+        self.pose_array = PoseArray()
+        self.estimated_Pose = PoseWithCovarianceStamped()
+        self.camera_pose = PoseWithCovarianceStamped()
+        self.associated_image_points = PoseArray()
 
         # Return values from the perception module
         self.processed_img = None
@@ -58,7 +66,7 @@ class PerceptionNode(object):
 
         # Initialize cameras. Has to be done before everything else.
         self.camera_info_topic = rospy.get_param("~camera_info_topic")
-        self.camera_info_sub = rospy.Subscriber(self.camera_info_topic, CameraInfo, 
+        self.camera_info_sub = rospy.Subscriber(self.camera_info_topic, CameraInfo,
                                                 self.camera_info_cb)
 
         while not rospy.is_shutdown() and self.camera is None:
@@ -72,24 +80,26 @@ class PerceptionNode(object):
         self.image_processed_topic = rospy.get_param("~image_processed_topic")
         self.image_processed_drawing_topic = rospy.get_param("~image_processed_drawing_topic")
         self.image_pose_topic = rospy.get_param("~image_pose_topic")
-        self.associated_image_points_topic = rospy.get_param("~associated_image_points_topic")
         self.estimated_pose_topic = rospy.get_param("~estimated_pose_topic")
         self.estimated_camera_pose_topic = rospy.get_param("~estimated_camera_pose_topic")
-        self.mahal_distance_topic = rospy.get_param("~mahal_distance_topic")
         self.estimated_poses_array_topic = rospy.get_param("~estimated_poses_array_topic")   # FIXME: What's the difference to estimated_pose_topic?
+        self.estimation_error_topic = rospy.get_param("~estimation_error_topic")
 
         # Subscribers
         rospy.Subscriber(self.image_topic, Image, self.image_cb)
 
         # Publishers
         self.image_processed_pub = rospy.Publisher(self.image_processed_topic, Image, queue_size=1)
-        self.image_processed_drawing_pub = rospy.Publisher(self.image_processed_drawing_topic, Image, queue_size=1)
+        self.image_processed_drawing_pub = rospy.Publisher(self.image_processed_drawing_topic,
+                                                           Image, queue_size=1)
         self.image_pose_pub = rospy.Publisher(self.image_pose_topic, Image, queue_size=1)
-        self.associated_image_points_pub = rospy.Publisher(self.associated_image_points_topic, PoseArray, queue_size=1) #TODO: rename this. It's a pose array and the name is misleading.
-        self.estimated_pose_pub = rospy.Publisher(self.estimated_pose_topic, PoseWithCovarianceStamped, queue_size=1)
-        self.estimated_camera_pose_pub = rospy.Publisher(self.estimated_camera_pose_topic, PoseWithCovarianceStamped, queue_size=10)
-        self.mahal_distance_pub = rospy.Publisher(self.mahal_distance_topic, Float32, queue_size=1)
-        self.estimated_poses_array_pub = rospy.Publisher(self.estimated_poses_array_topic, PoseArray, queue_size=1)
+        self.estimated_pose_pub = rospy.Publisher(self.estimated_pose_topic,
+                                                  PoseWithCovarianceStamped, queue_size=1)
+        self.estimated_camera_pose_pub = rospy.Publisher(self.estimated_camera_pose_topic,
+                                                         PoseWithCovarianceStamped, queue_size=10)
+        self.estimated_poses_array_pub = rospy.Publisher(self.estimated_poses_array_topic,
+                                                         PoseArray, queue_size=1)
+        self.estimation_error_pub = rospy.Publisher(self.estimation_error_topic, Float64, queue_size=1)
 
         # FIXME: This doesn't seem good to publish.
         self.transformPublisher = rospy.Publisher("/tf", tf.msg.tfMessage, queue_size=1)
@@ -100,10 +110,7 @@ class PerceptionNode(object):
         while not rospy.is_shutdown():
             self.run_perception()
 
-            self.transform_images()
-
             self.publish_messages()
-
 
             rate.sleep()
 
@@ -119,14 +126,12 @@ class PerceptionNode(object):
                         # distCoeffs=np.zeros((1,4), dtype=np.float32),
                         # resolution=(msg.height, msg.width))
         # Using K and D, we should subscribe to the raw image topic
-        camera = Camera(cameraMatrix=np.array(msg.K, dtype=np.float32).reshape((3,3)),
+        self.camera = Camera(cameraMatrix=np.array(msg.K, dtype=np.float32).reshape((3,3)),
                        distCoeffs=np.array(msg.D, dtype=np.float32),
                        resolution=(msg.height, msg.width))
-        self.camera = camera
 
         # We only want one message
         self.camera_info_sub.unregister()
-
 
 
     def image_cb(self, msg):
@@ -149,36 +154,40 @@ class PerceptionNode(object):
             except CvBridgeError as error_msg:
                 print(error_msg)
             else:
-                (ds_pose, pose_aquired) = self.update(image_mat, self.estimated_ds_pose)
+                self.estimated_ds_pose, self.pose_aquired = self.estimate_pose(image_mat, self.estimated_ds_pose)
 
-                # FIXME: Can you do that with an try-assert?
-                # Or put that in the update function itself or so.
-                # Bit weird with the circle of estimated_ds_pose
-                if not pose_aquired:
-                    self.estimated_ds_pose = None
-                else:
-                    self.estimated_ds_pose = ds_pose
-
+                self.transform_to_messages()
+                if self.pose_aquired:
+                    self.estimation_error = self.estimated_ds_pose.rmse
+                
         self.got_image = False
 
 
-    def update(self, img_mat, estimated_ds_pose):
+    def estimate_pose(self, img_mat, estimated_ds_pose):
         """
-        FIXME: Lots of stuff happening here. 
-        - Extract the publishing into an individual function
-        - take care of all the function arguments.
-        - formatting in general. 
+        Update step for the estimation
+        NOTE: We don't compute the covariance of the pose right now. The functions are there,
+        but for computational reasons, we skip that part. 
         """
-        start = time.time()
+        estimation_start = time.time()
 
-        (ds_pose, pose_aquired, candidates,
+        (ds_pose, pose_aquired, _,
          self.processed_img, self.pose_img) = self.perception.estimatePose(img_mat, estimated_ds_pose,
                                                                  self.camera_pose_vector)
 
-        if ds_pose and ds_pose.covariance is None:
-            ds_pose.calcCovariance()
+        estimation_finished = time.time()
 
-        elapsed = time.time() - start   # FIXME: Dangerous, could be zero...
+        self.annotate_images(estimation_start, estimation_finished)
+
+        return ds_pose, pose_aquired
+
+
+    def annotate_images(self, estimation_start, estimation_finished):
+        """
+        Function to print FPS on the image.
+        TODO: Is this really necessary?
+        """
+        elapsed = estimation_finished - estimation_start
         virtual_frequency = 1./elapsed
         hz = min(self.hz, virtual_frequency)
 
@@ -190,77 +199,51 @@ class PerceptionNode(object):
                    (int(self.pose_img.shape[1]*4/5), 45), cv.FONT_HERSHEY_SIMPLEX, 0.7,
                    color=(0,255,0), thickness=2, lineType=cv.LINE_AA)
 
-        time_stamp = rospy.Time.now()
 
-
-        # publish pose if pose has been aquired
+    def transform_to_messages(self):
+        """
+        Convert all images into publishable formats.
+        """
+        self.time_stamp = rospy.Time.now()
 
         self.processed_image_drawing = self.bridge.cv2_to_imgmsg(self.processed_img)
         self.pose_image = self.bridge.cv2_to_imgmsg(self.pose_img)
         self.processed_image = self.bridge.cv2_to_imgmsg(self.perception.featureExtractor.img)
 
-        # FIXME: Check the if conditions, esp. the detection count. Might be good to reduce them.
-        # TODO: Put al of this into the publishing function
-        # TODO: put the conversion into an extra function, too.
-        if pose_aquired and ds_pose.detectionCount >= 10:
-            # publish transform
+        if self.pose_aquired:
+
             ds_transform = vectorToTransform(self.image_msg.header.frame_id + "/perception",
                                             "docking_station_link",
-                                            ds_pose.translationVector,
-                                            ds_pose.rotationVector,
-                                            timeStamp=time_stamp)
+                                            self.estimated_ds_pose.translationVector,
+                                            self.estimated_ds_pose.rotationVector,
+                                            timeStamp=self.time_stamp)
             self.transformPublisher.publish(tf.msg.tfMessage([ds_transform]))
 
-            # Publish placement of the light sources as a PoseArray (published in the docking_station frame)
-            pose_array = featurePointsToMsg("docking_station_link", self.perception.featureModel.features, timeStamp=time_stamp)
-            self.estimated_poses_array_pub.publish(pose_array)
+            self.pose_array = featurePointsToMsg("docking_station_link",
+                                                self.perception.featureModel.features, timeStamp=self.time_stamp)
 
-            # publish estimated pose
-            self.estimated_pose_pub.publish(
-                vectorToPose(self.image_msg.header.frame_id,
-                ds_pose.translationVector,
-                ds_pose.rotationVector,
-                ds_pose.covariance,
-                timeStamp=time_stamp))
-            
-            # publish mahalanobis distance
-            if not ds_pose.mahaDist and estimated_ds_pose:
-                ds_pose.calcMahalanobisDist(estimated_ds_pose)
-                self.mahal_distance_pub.publish(Float32(ds_pose.mahaDist))
+            self.estimated_Pose = vectorToPose(self.image_msg.header.frame_id,
+                                            self.estimated_ds_pose.translationVector,
+                                            self.estimated_ds_pose.rotationVector,
+                                            self.estimated_ds_pose.covariance, timeStamp=self.time_stamp)
 
-            self.estimated_camera_pose_pub.publish(
-                vectorToPose("docking_station_link",
-                ds_pose.camTranslationVector,
-                ds_pose.camRotationVector,
-                ds_pose.calcCamPoseCovariance(),
-                timeStamp=time_stamp))
-
-             
-        if ds_pose:
-            # if the light source candidates have been associated, we pusblish the associated candidates
-            self.associated_image_points_pub.publish(lightSourcesToMsg(ds_pose.associatedLightSources, timeStamp=time_stamp))
-        else:
-            # otherwise we publish all candidates
-            self.associated_image_points_pub.publish(lightSourcesToMsg(candidates, timeStamp=time_stamp))
-
-        return ds_pose, pose_aquired
-    
-    def transform_images(self):
-        """
-        Convert all images into publishable formats.
-        FIXME: Might not use this one
-        """
-        pass
-
+            self.camera_pose = vectorToPose("docking_station_link",
+                                            self.estimated_ds_pose.camTranslationVector,
+                                            self.estimated_ds_pose.camRotationVector,
+                                            self.estimated_ds_pose.calcCamPoseCovariance(),
+                                            timeStamp=self.time_stamp)        
 
     def publish_messages(self):
         """
         Collect all messages and publish them
         """
-        # TODO: separate the conversion
         self.image_processed_drawing_pub.publish(self.processed_image_drawing)
         self.image_processed_pub.publish(self.processed_image)
         self.image_pose_pub.publish(self.pose_image)
+        self.estimation_error_pub.publish(self.estimation_error)
+        self.estimated_poses_array_pub.publish(self.pose_array)
+        self.estimated_pose_pub.publish(self.estimated_Pose)
+        self.estimated_camera_pose_pub.publish(self.camera_pose)
 
 
 if __name__ == '__main__':

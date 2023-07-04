@@ -127,7 +127,7 @@ def msgToImagePoints(msg):
     return imgPoints
 
 def readCameraYaml(cameraYamlPath):
-    cameraYamlPath = os.path.join(rospkg.RosPack().get_path("lolo_perception"), cameraYamlPath)
+    cameraYamlPath = os.path.join(rospkg.RosPack().get_path("sam_perception"), cameraYamlPath)
     with open(cameraYamlPath, "r") as file:
         calibData = yaml.load(file)
     

@@ -12,45 +12,90 @@
   <!--Some parameters for the perception node-->
   <arg name="feature_model_yaml" default="docking_station_2.yaml" />
   <arg name="hats_mode" default="valley" /> <!--peak, valley or simple-->
-  <arg name="camera_info_topic" default="sam/camera_info" /> 
+  <arg name="camera_info_topic" default="camera_info" /> 
   <arg name="image_processed_topic" default="perception/image_processed" /> 
   <arg name="image_processed_drawing_topic" default="perception/image_processed_drawing" /> 
   <arg name="image_pose_topic" default="perception/image_pose" /> 
-  <arg name="associated_image_points_topic" default="perception/associated_image_points" /> 
   <arg name="estimated_pose_topic" default="perception/estimated_pose" /> 
   <arg name="camera_pose_topic" default="perception/camera_pose" /> 
   <arg name="estimated_camera_pose_topic" default="perception/estimated_camera_pose" /> 
-  <arg name="mahal_distance_topic" default="perception/mahal_distance" /> 
   <arg name="estimated_poses_array_topic" default="perception/estimated_poses_array" /> 
+  <arg name="estimation_error_topic" default="perception/estimation_error" /> 
   
   <!-- TODO: Here, we want the namespaces for each camera to run the nodes in parallel
   with a wrapper node to process the images -->
-  <node name="perception_node" pkg="sam_perception" type="perception_node.py" output="screen" >
-    <param name="feature_model_yaml" value="$(arg feature_model_yaml)"/>
-    <param name="hz" value="$(arg hz)"/>
-    <param name="cv_show" value="$(arg cv_show)"/>
-    <param name="publish_cam_pose" value="$(eval arg('perspective') == 'dockingstation')"/>
-    <param name="hats_mode" value="$(arg hats_mode)"/>
-    <param name="pose_feedback" value="$(arg pose_feedback)"/>
+  <group ns="/sam/payload/cam_forward/">
+    <node name="perception_node" pkg="sam_perception" type="perception_node.py" output="screen" >
+      <param name="feature_model_yaml" value="$(arg feature_model_yaml)"/>
+      <param name="hz" value="$(arg hz)"/>
+      <param name="cv_show" value="$(arg cv_show)"/>
+      <param name="publish_cam_pose" value="$(eval arg('perspective') == 'dockingstation')"/>
+      <param name="hats_mode" value="$(arg hats_mode)"/>
+      <param name="pose_feedback" value="$(arg pose_feedback)"/>
 
-    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
-    <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
-    <param name="image_processed_topic" value="$(arg image_processed_topic)"/>
-    <param name="image_processed_drawing_topic" value="$(arg image_processed_drawing_topic)"/>
-    <param name="image_pose_topic" value="$(arg image_pose_topic)"/>
-    <param name="associated_image_points_topic" value="$(arg associated_image_points_topic)"/>
-    <param name="estimated_pose_topic" value="$(arg estimated_pose_topic)"/>
-    <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
-    <param name="estimated_camera_pose_topic" value="$(arg estimated_camera_pose_topic)"/>
-    <param name="mahal_distance_topic" value="$(arg mahal_distance_topic)"/>
-    <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
+      <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+      <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
+      <param name="image_processed_topic" value="$(arg image_processed_topic)"/>
+      <param name="image_processed_drawing_topic" value="$(arg image_processed_drawing_topic)"/>
+      <param name="image_pose_topic" value="$(arg image_pose_topic)"/>
+      <param name="estimated_pose_topic" value="$(arg estimated_pose_topic)"/>
+      <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
+      <param name="estimated_camera_pose_topic" value="$(arg estimated_camera_pose_topic)"/>
+      <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
+      <param name="estimation_error_topic" value="$(arg estimation_error_topic)"/>
 
+      <param name="image_topic" value="/sam/payload/cam_forward/image_raw"/>
+      <remap from="camera_info" to="/sam/payload/cam_front/camera_info"/>
+    </node>
+  </group>
 
-    <param name="right_image_topic" value="/sam/payload/cam_starboard/image_raw"/>
-    <param name="left_image_topic" value="/sam/payload/cam_port/image_raw"/>
-    <param name="image_topic" value="/sam/payload/cam_forward/image_raw"/>
-    <remap from="/sam/camera_info" to="/sam/payload/cam_port/camera_info"/>
-  </node>
+  <!-- <group ns="/sam/payload/cam_port/">
+    <node name="perception_node" pkg="sam_perception" type="perception_node.py" output="screen" >
+      <param name="feature_model_yaml" value="$(arg feature_model_yaml)"/>
+      <param name="hz" value="$(arg hz)"/>
+      <param name="cv_show" value="$(arg cv_show)"/>
+      <param name="publish_cam_pose" value="$(eval arg('perspective') == 'dockingstation')"/>
+      <param name="hats_mode" value="$(arg hats_mode)"/>
+      <param name="pose_feedback" value="$(arg pose_feedback)"/>
+
+      <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+      <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
+      <param name="image_processed_topic" value="$(arg image_processed_topic)"/>
+      <param name="image_processed_drawing_topic" value="$(arg image_processed_drawing_topic)"/>
+      <param name="image_pose_topic" value="$(arg image_pose_topic)"/>
+      <param name="estimated_pose_topic" value="$(arg estimated_pose_topic)"/>
+      <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
+      <param name="estimated_camera_pose_topic" value="$(arg estimated_camera_pose_topic)"/>
+      <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
+
+      <param name="image_topic" value="/sam/payload/cam_port/image_raw"/>
+      <remap from="camera_info" to="/sam/payload/cam_port/camera_info"/>
+    </node>
+  </group>
+
+  <group ns="/sam/payload/cam_starboard/">
+    <node name="perception_node" pkg="sam_perception" type="perception_node.py" output="screen" >
+      <param name="feature_model_yaml" value="$(arg feature_model_yaml)"/>
+      <param name="hz" value="$(arg hz)"/>
+      <param name="cv_show" value="$(arg cv_show)"/>
+      <param name="publish_cam_pose" value="$(eval arg('perspective') == 'dockingstation')"/>
+      <param name="hats_mode" value="$(arg hats_mode)"/>
+      <param name="pose_feedback" value="$(arg pose_feedback)"/>
+
+      <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+      <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
+      <param name="image_processed_topic" value="$(arg image_processed_topic)"/>
+      <param name="image_processed_drawing_topic" value="$(arg image_processed_drawing_topic)"/>
+      <param name="image_pose_topic" value="$(arg image_pose_topic)"/>
+      <param name="estimated_pose_topic" value="$(arg estimated_pose_topic)"/>
+      <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
+      <param name="estimated_camera_pose_topic" value="$(arg estimated_camera_pose_topic)"/>
+      <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
+
+      <param name="image_topic" value="/sam/payload/cam_starboard/image_raw"/>
+      <remap from="camera_info" to="/sam/payload/cam_starboard/camera_info"/>
+    </node>
+  </group> -->
 
   <!-- TODO: What does this node do? -->
   <node pkg="sam_perception" type="path_publisher_node.py" name="path_publisher_node" if="$(eval arg('publish_path') == true)">
