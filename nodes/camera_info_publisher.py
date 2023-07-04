@@ -33,7 +33,7 @@ def yaml_to_CameraInfo(yaml_file, camera_link_id):
     """
     # Load data from file
     with open(yaml_file, "r") as file_handle:
-        calib_data = yaml.load(file_handle)
+        calib_data = yaml.load(file_handle, Loader=yaml.FullLoader)
     # Parse
     camera_info_msg = CameraInfo()
     camera_info_msg.header.frame_id = camera_link_id
