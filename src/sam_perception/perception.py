@@ -347,10 +347,10 @@ class Perception:
                     # TODO: Do this is pose_estimation.py?
                     if estDSPose:
                         # mahanalobis distance check
-                        # mahaDist = dsPose.calcMahalanobisDist(estDSPose)
-                        #if mahaDist <= self.mahalanobisDistThresh:
+                        mahaDist = dsPose.calcMahalanobisDist(estDSPose)
+                        if mahaDist <= self.mahalanobisDistThresh:
                             # disregard poses with large mahalaobis distance
-                            #pass
+                            pass
                         dsPose.detectionCount += estDSPose.detectionCount
                     if calcCovariance:
                         dsPose.calcCovariance()

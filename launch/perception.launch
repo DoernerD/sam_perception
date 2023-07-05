@@ -5,7 +5,6 @@
   <arg name="sim" default="false" /> <!-- When running simulation, some topic needs to be remapped-->
   <arg name="hz" default="15"/>
   <arg name="pose_feedback" default="true"/>
-  <arg name="cv_show" default="false"/>
   <arg name="rviz" default="false"/>
   <arg name="sam" default="true"/>
 
@@ -22,13 +21,10 @@
   <arg name="estimated_poses_array_topic" default="perception/estimated_poses_array" /> 
   <arg name="estimation_error_topic" default="perception/estimation_error" /> 
   
-  <!-- TODO: Here, we want the namespaces for each camera to run the nodes in parallel
-  with a wrapper node to process the images -->
   <group ns="/sam/payload/cam_forward/">
     <node name="perception_node" pkg="sam_perception" type="perception_node.py" output="screen" >
       <param name="feature_model_yaml" value="$(arg feature_model_yaml)"/>
       <param name="hz" value="$(arg hz)"/>
-      <param name="cv_show" value="$(arg cv_show)"/>
       <param name="publish_cam_pose" value="$(eval arg('perspective') == 'dockingstation')"/>
       <param name="hats_mode" value="$(arg hats_mode)"/>
       <param name="pose_feedback" value="$(arg pose_feedback)"/>
@@ -45,15 +41,17 @@
       <param name="estimation_error_topic" value="$(arg estimation_error_topic)"/>
 
       <param name="image_topic" value="/sam/payload/cam_forward/image_raw"/>
+      <param name="camera_frame" value="sam/camera_front_link"/>
       <remap from="camera_info" to="/sam/payload/cam_front/camera_info"/>
+      <remap from="$(arg estimated_pose_topic)" to="/sam/perception/estimated_pose"/>
+
     </node>
   </group>
 
-  <!-- <group ns="/sam/payload/cam_port/">
+  <group ns="/sam/payload/cam_port/">
     <node name="perception_node" pkg="sam_perception" type="perception_node.py" output="screen" >
       <param name="feature_model_yaml" value="$(arg feature_model_yaml)"/>
       <param name="hz" value="$(arg hz)"/>
-      <param name="cv_show" value="$(arg cv_show)"/>
       <param name="publish_cam_pose" value="$(eval arg('perspective') == 'dockingstation')"/>
       <param name="hats_mode" value="$(arg hats_mode)"/>
       <param name="pose_feedback" value="$(arg pose_feedback)"/>
@@ -67,9 +65,13 @@
       <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
       <param name="estimated_camera_pose_topic" value="$(arg estimated_camera_pose_topic)"/>
       <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
+      <param name="estimation_error_topic" value="$(arg estimation_error_topic)"/>
 
       <param name="image_topic" value="/sam/payload/cam_port/image_raw"/>
+      <param name="camera_frame" value="sam/camera_front_left_link"/>
       <remap from="camera_info" to="/sam/payload/cam_port/camera_info"/>
+      <remap from="$(arg estimated_pose_topic)" to="/sam/perception/estimated_pose"/>
+
     </node>
   </group>
 
@@ -77,7 +79,6 @@
     <node name="perception_node" pkg="sam_perception" type="perception_node.py" output="screen" >
       <param name="feature_model_yaml" value="$(arg feature_model_yaml)"/>
       <param name="hz" value="$(arg hz)"/>
-      <param name="cv_show" value="$(arg cv_show)"/>
       <param name="publish_cam_pose" value="$(eval arg('perspective') == 'dockingstation')"/>
       <param name="hats_mode" value="$(arg hats_mode)"/>
       <param name="pose_feedback" value="$(arg pose_feedback)"/>
@@ -91,11 +92,15 @@
       <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
       <param name="estimated_camera_pose_topic" value="$(arg estimated_camera_pose_topic)"/>
       <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
+      <param name="estimation_error_topic" value="$(arg estimation_error_topic)"/>
 
       <param name="image_topic" value="/sam/payload/cam_starboard/image_raw"/>
+      <param name="camera_frame" value="sam/camera_front_right_link"/>
       <remap from="camera_info" to="/sam/payload/cam_starboard/camera_info"/>
+      <remap from="$(arg estimated_pose_topic)" to="/sam/perception/estimated_pose"/>
+
     </node>
-  </group> -->
+  </group>
 
   <!-- TODO: What does this node do? -->
   <node pkg="sam_perception" type="path_publisher_node.py" name="path_publisher_node" if="$(eval arg('publish_path') == true)">

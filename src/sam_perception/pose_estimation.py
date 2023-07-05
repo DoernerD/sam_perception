@@ -420,12 +420,12 @@ class DSPose:
                 self.calcRMSE()
             pixelCovariance = self.pixelCovariances
 
-        # covariance = calcPoseCovarianceFixedAxis(self.camera,
-                                                 # self.featureModel,
-                                                 # self.translationVector,
-                                                 # self.rotationVector,
-                                                 # pixelCovariance)
-        covariance = np.eye(6)
+        covariance = calcPoseCovarianceFixedAxis(self.camera,
+                                                 self.featureModel,
+                                                 self.translationVector,
+                                                 self.rotationVector,
+                                                 pixelCovariance)
+        # covariance = np.eye(6)
 
         self._covariance = covariance
 
