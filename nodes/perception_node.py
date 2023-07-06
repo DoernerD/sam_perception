@@ -256,9 +256,10 @@ class PerceptionNode(object):
                                             self.estimated_ds_pose.covariance, time_stamp)
 
             estimated_pose_docking_frame_mat = self.pose_to_matrix(estimated_pose_docking_frame_pose.pose)
-            estimated_pose_base_frame_mat = self.express_in_base(estimated_pose_docking_frame_mat, self.base2camera_mat)
-            self.estimated_pose = self.matrix_to_pose(estimated_pose_base_frame_mat, self.estimated_ds_pose.covariance,
-                                                      time_stamp)
+            estimated_pose_base_frame_mat = self.express_in_base(estimated_pose_docking_frame_mat,
+                                                                 self.base2camera_mat)
+            self.estimated_pose = self.matrix_to_pose(self.base_frame, estimated_pose_base_frame_mat,
+                                                      self.estimated_ds_pose.covariance, time_stamp)
 
             self.camera_pose = vectorToPose("docking_station_link",
                                             self.estimated_ds_pose.camTranslationVector,
@@ -303,10 +304,9 @@ class PerceptionNode(object):
         return final_transformation
 
 
-    def matrix_to_pose(self, matrix, covariance, time_stamp):
+    def matrix_to_pose(self, frame_id, matrix, covariance, time_stamp):
         """
         Convert a matrix into a pose
-        FIXME: Hard coded frame ID
         """
         # Get rotation and translation from matrix
         R = Rotation.from_matrix(matrix[0:3,0:3])
@@ -314,7 +314,7 @@ class PerceptionNode(object):
         tran = matrix[0:3,3]
 
         pose = PoseWithCovarianceStamped()
-        pose.header.frame_id = '/sam/base_link'
+        pose.header.frame_id = frame_id
         pose.header.stamp = time_stamp
         pose.pose.pose.position.x = tran[0]
         pose.pose.pose.position.y = tran[1]
