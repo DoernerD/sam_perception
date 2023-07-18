@@ -31,7 +31,7 @@
 
     <group ns="/sam/payload/cam_port/">
         <param name="calibration_file" type="string"
-            value="$(find sam_perception)/camera_calibration_data/asko23/cam_port.yaml"/>
+            value="$(find sam_perception)/camera_calibration_data/2023-07-13__Lab_calib/cam_port.yaml"/>
         <param name="camera_link_id" type="string"
             value="/sam/camera_front_left_link"/>
 
@@ -41,7 +41,7 @@
 
     <group ns="/sam/payload/cam_starboard/">
         <param name="calibration_file" type="string"
-            value="$(find sam_perception)/camera_calibration_data/asko23/cam_starboard.yaml"/>
+            value="$(find sam_perception)/camera_calibration_data/2023-07-13__Lab_calib/cam_starboard.yaml"/>
         <param name="camera_link_id" type="string"
             value="/sam/camera_front_right_link"/>
 
@@ -51,7 +51,7 @@
 
     <group ns="/sam/payload/cam_forward/">
         <param name="calibration_file" type="string"
-            value="$(find sam_perception)/camera_calibration_data/asko23/cam_front.yaml"/>
+            value="$(find sam_perception)/camera_calibration_data/2023-07-13__Lab_calib/cam_forward.yaml"/>
         <param name="camera_link_id" type="string"
             value="/sam/camera_forward_link"/>
 
@@ -59,7 +59,7 @@
             type="camera_info_publisher.py" />
     </group>
 
-    <group ns="/sam/payload/cam_down/">
+    <!-- <group ns="/sam/payload/cam_down/">
         <param name="calibration_file" type="string"
             value="$(find sam_perception)/camera_calibration_data/asko23/cam_down.yaml"/>
         <param name="camera_link_id" type="string"
@@ -67,6 +67,6 @@
 
         <node name="camera_info_publisher" pkg="sam_perception"
             type="camera_info_publisher.py" />
-    </group>
+    </group> -->
 
 </launch>

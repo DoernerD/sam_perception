@@ -11,6 +11,10 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import tf2_ros
 
+from tf.transformations import quaternion_from_euler, euler_from_quaternion
+from tf.transformations import translation_matrix
+from tf.transformations import quaternion_matrix, quaternion_from_matrix
+
 import rospkg
 import rospy
 from sensor_msgs.msg import Image, CameraInfo
@@ -79,7 +83,7 @@ class PerceptionNode(object):
 
         try:
             rospy.loginfo("Waiting for transforms")
-            base2camera_tf = tf_buffer.lookup_transform(self.camera_frame, self.base_frame,
+            base2camera_tf = tf_buffer.lookup_transform(self.base_frame, self.camera_frame,
                                                rospy.Time(0), rospy.Duration(60))
             self.base2camera_mat = self.transform_to_matrix(base2camera_tf)
             rospy.loginfo("[PN]: got transform %s to %s" % (self.base_frame, self.camera_frame))
@@ -250,6 +254,7 @@ class PerceptionNode(object):
             self.pose_array = featurePointsToMsg("docking_station_link",
                                                 self.perception.featureModel.features, time_stamp)
 
+            # Note: for some reason, self.image_msg.header is empty now.
             estimated_pose_docking_frame_pose = vectorToPose(self.image_msg.header.frame_id,
                                             self.estimated_ds_pose.translationVector,
                                             self.estimated_ds_pose.rotationVector,
@@ -269,6 +274,7 @@ class PerceptionNode(object):
 
             self.estimation_error = self.estimated_ds_pose.rmse
 
+
     def pose_to_matrix(self, pose):
         """
         Pose msg to 4x4 numpy array.
@@ -286,20 +292,37 @@ class PerceptionNode(object):
 
         return transformation
 
+
     def express_in_base(self, tf_to_ds, tf_to_base):
         """
         Express the docking station vector in sam/base_link frame.
         """
+        # FIXME: Is this transformation right? Esp. with the base2cam?
         # Create rotation matrices and translation vectors
         R_ds_to_cam = tf_to_ds[0:3,0:3]
         t_ds_to_cam = tf_to_ds[0:3,3]
 
+        # -90deg around camera z axis
+        quat_cam_2_ds = quaternion_from_euler(0., 0., -np.pi/2)
+        R_cam_to_ds = quaternion_matrix(quat_cam_2_ds)
+
         # Analytical inversion
         invers_tf_to_ds = np.zeros((4,4))
         invers_tf_to_ds[0:3,0:3] = R_ds_to_cam.transpose()
-        invers_tf_to_ds[0:3,3] = -R_ds_to_cam.transpose().dot(t_ds_to_cam)
+        invers_tf_to_ds[0:3,3] = -R_ds_to_cam.dot(t_ds_to_cam)
         invers_tf_to_ds[3,3] = 1.
-        final_transformation = np.matmul(tf_to_base, invers_tf_to_ds)
+        # final_transformation = np.matmul(tf_to_base, invers_tf_to_ds)
+        final_transformation = np.matmul(tf_to_base, tf_to_ds)
+        # final_transformation = np.matmul(tf_to_base, np.matmul(R_cam_to_ds,tf_to_ds))
+
+        quat_final = quaternion_from_matrix(final_transformation)
+        rpy_final = euler_from_quaternion(quat_final)
+
+        # print("[PN]: t_ds_to_cam: {}".format(t_ds_to_cam))
+        # print("[PN]: inv_t_ds_cm: {}".format(invers_tf_to_ds[0:3,3]))
+        # print("[PN]: final_tf   : {}".format(final_transformation[0:3,3]))
+        # print("[PN]: RPY Final  : {}".format(np.rad2deg(rpy_final)))
+        # print("cam2base: {}".format(tf_to_base))
 
         return final_transformation
 
@@ -326,7 +349,6 @@ class PerceptionNode(object):
         pose.pose.covariance = list(np.ravel(covariance))
 
         return pose
-
 
 
     def publish_messages(self):

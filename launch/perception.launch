@@ -42,7 +42,7 @@
 
       <param name="image_topic" value="/sam/payload/cam_forward/image_raw"/>
       <param name="camera_frame" value="sam/camera_front_link"/>
-      <remap from="camera_info" to="/sam/payload/cam_front/camera_info"/>
+      <remap from="camera_info" to="/sam/payload/cam_forward/camera_info"/>
       <remap from="$(arg estimated_pose_topic)" to="/sam/perception/estimated_pose"/>
 
     </node>
