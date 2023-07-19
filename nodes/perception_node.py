@@ -307,10 +307,10 @@ class PerceptionNode(object):
         R_cam_to_ds = quaternion_matrix(quat_cam_2_ds)
 
         # Analytical inversion
-        invers_tf_to_ds = np.zeros((4,4))
-        invers_tf_to_ds[0:3,0:3] = R_ds_to_cam.transpose()
-        invers_tf_to_ds[0:3,3] = -R_ds_to_cam.dot(t_ds_to_cam)
-        invers_tf_to_ds[3,3] = 1.
+        # invers_tf_to_ds = np.zeros((4,4))
+        # invers_tf_to_ds[0:3,0:3] = R_ds_to_cam.transpose()
+        # invers_tf_to_ds[0:3,3] = -R_ds_to_cam.dot(t_ds_to_cam) # R needs to be transposed, too when multiplying. 
+        # invers_tf_to_ds[3,3] = 1.
         # final_transformation = np.matmul(tf_to_base, invers_tf_to_ds)
         final_transformation = np.matmul(tf_to_base, tf_to_ds)
         # final_transformation = np.matmul(tf_to_base, np.matmul(R_cam_to_ds,tf_to_ds))
