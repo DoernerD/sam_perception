@@ -40,7 +40,7 @@
       <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
       <param name="estimation_error_topic" value="$(arg estimation_error_topic)"/>
 
-      <param name="image_topic" value="/sam/payload/cam_forward/image_raw"/>
+      <param name="image_topic" value="/sam/payload/cam_forward/image_decompressed"/>
       <param name="camera_frame" value="sam/camera_front_link"/>
       <remap from="camera_info" to="/sam/payload/cam_forward/camera_info"/>
       <remap from="$(arg estimated_pose_topic)" to="/sam/perception/estimated_pose"/>
@@ -67,7 +67,7 @@
       <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
       <param name="estimation_error_topic" value="$(arg estimation_error_topic)"/>
 
-      <param name="image_topic" value="/sam/payload/cam_port/image_raw"/>
+      <param name="image_topic" value="/sam/payload/cam_port/image_decompressed"/>
       <param name="camera_frame" value="sam/camera_front_left_link"/>
       <remap from="camera_info" to="/sam/payload/cam_port/camera_info"/>
       <remap from="$(arg estimated_pose_topic)" to="/sam/perception/estimated_pose"/>
@@ -94,7 +94,7 @@
       <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
       <param name="estimation_error_topic" value="$(arg estimation_error_topic)"/>
 
-      <param name="image_topic" value="/sam/payload/cam_starboard/image_raw"/>
+      <param name="image_topic" value="/sam/payload/cam_starboard/image_decompressed"/>
       <param name="camera_frame" value="sam/camera_front_right_link"/>
       <remap from="camera_info" to="/sam/payload/cam_starboard/camera_info"/>
       <remap from="$(arg estimated_pose_topic)" to="/sam/perception/estimated_pose"/>
