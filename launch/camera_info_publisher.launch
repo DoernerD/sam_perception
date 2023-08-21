@@ -63,7 +63,7 @@
     <!-- LAB Calibs -->
     <group ns="/sam/payload/cam_port/">
         <param name="calibration_file" type="string"
-            value="$(find sam_perception)/camera_calibration_data/2023-07-13__Lab_calib/cam_port.yaml"/>
+            value="$(find sam_perception)/camera_calibration_data/2023-08-18__Bergshamra/cam_port.yaml"/>
         <param name="camera_link_id" type="string"
             value="/sam/camera_front_left_link"/>
 
@@ -73,7 +73,7 @@
 
     <group ns="/sam/payload/cam_starboard/">
         <param name="calibration_file" type="string"
-            value="$(find sam_perception)/camera_calibration_data/2023-07-13__Lab_calib/cam_starboard.yaml"/>
+            value="$(find sam_perception)/camera_calibration_data/2023-08-18__Bergshamra/cam_starboard.yaml"/>
         <param name="camera_link_id" type="string"
             value="/sam/camera_front_right_link"/>
 
@@ -83,7 +83,7 @@
 
     <group ns="/sam/payload/cam_forward/">
         <param name="calibration_file" type="string"
-            value="$(find sam_perception)/camera_calibration_data/2023-07-13__Lab_calib/cam_forward.yaml"/>
+            value="$(find sam_perception)/camera_calibration_data/2023-08-18__Bergshamra/cam_forward.yaml"/>
         <param name="camera_link_id" type="string"
             value="/sam/camera_forward_link"/>
 
