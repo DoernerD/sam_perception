@@ -43,6 +43,7 @@ def plotPoseImageInfo(poseImg,
         validYaw, validPitch, validRoll = dsPose.validOrientation(*validOrientationRange)
         validOrientation = validYaw and validPitch and validRoll
 
+
     if poseAquired:
         axisColor = None
         roiColor = (0, 255, 0)

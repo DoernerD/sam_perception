@@ -364,6 +364,8 @@ class Perception:
 
                 else:
                     print("Pose estimation failed")
+                
+                print(poseAquired)
 
         if self.stage in (1, 2):
             # In stage 1 and two, it could be useful to see the
@@ -411,6 +413,7 @@ class Perception:
 
         self.processedImg = processedImg
         self.poseImg = poseImg
+
         return dsPose, poseAquired, candidates, processedImg, poseImg
 
 

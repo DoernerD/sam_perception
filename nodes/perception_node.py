@@ -359,10 +359,12 @@ class PerceptionNode(object):
         self.image_processed_pub.publish(self.processed_image)
         self.image_pose_pub.publish(self.pose_image)
 
+
         # Publish those only when you get a new one and make sure you have 2
         # detections. That's enough to reject outliers which are only there for
         # one frame (simple heuristic duh)
-        if self.pose_aquired and self.estimated_ds_pose.detectionCount >= 2:
+        if self.pose_aquired and self.estimated_ds_pose.detectionCount >= 3:
+
             self.estimation_error_pub.publish(self.estimation_error)
             self.estimated_poses_array_pub.publish(self.pose_array)
             self.estimated_pose_pub.publish(self.estimated_pose)
