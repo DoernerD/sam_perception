@@ -26,6 +26,19 @@ def polygons(rads, ns, shifts, zShifts):
     return points
 
 
+class RoationWrapper:
+    """
+    Wrapper class for the rotation, since in scipy 1.4, they changed from
+    as_dcm() to as_matrix(), but the function is the same.
+    """
+    def __init__(self, order, angles):
+        self.rot_mat = R.from_euler(order, angles)
+
+    def as_matrix(self):
+        return self.rot_mat.as_dcm()
+
+
+
 class FeatureModel:
 
     # default light source placement uncertainty percentage (percentage of max radius)
@@ -41,7 +54,8 @@ class FeatureModel:
         self.name = name
         
         self.features = features
-        r = R.from_euler("XYZ", euler)
+        # r = R.from_euler("XYZ", euler)
+        r = RoationWrapper("XYZ", euler)
         rotMat = r.as_matrix()
         self.features = np.matmul(rotMat, self.features[:, :3].transpose()).transpose()
         self.features = self.features[:, :3].copy() # Don't need homogenious

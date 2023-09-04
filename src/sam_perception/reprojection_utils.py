@@ -3,6 +3,17 @@ import cv2 as cv
 import time
 from scipy.spatial.transform import Rotation as R
 
+class RoationWrapper:
+    """
+    Wrapper class for the rotation, since in scipy 1.4, they changed from
+    as_dcm() to as_matrix(), but the function is the same.
+    """
+    def __init__(self, rotationVector):
+        self.rot_mat = R.from_rotvec(rotationVector)
+
+    def as_matrix(self):
+        return self.rot_mat.as_dcm()
+
 def adjustToCenter(center, p):
     return (p[0]+center[0], p[1]+center[1])
 
@@ -94,7 +105,7 @@ def plotReprojection(points, cameraResolution, f, deltaE, rangeMeter, fScale=1./
 
 
 def NEW_calcPoseReprojectionRMSEThreshold(translationVec, rotationVec, camera, featureModel, showImg=False):
-    rotMat = R.from_rotvec(rotationVec).as_matrix()
+    rotMat = RoationWrapper(rotationVec).as_matrix()
 
     reprErrs = []
     pointsX = []
@@ -150,7 +161,7 @@ def NEW_calcPoseReprojectionRMSEThreshold(translationVec, rotationVec, camera, f
     return maxRMSE
 
 def calcPoseReprojectionThresholds(translationVec, rotationVec, camera, featureModel):
-    rotMat = R.from_rotvec(rotationVec).as_matrix()
+    rotMat = RoationWrapper(rotationVec).as_matrix()
 
     reprErrs = []
     pointsX = []
@@ -166,7 +177,7 @@ def calcPoseReprojectionThresholds(translationVec, rotationVec, camera, featureM
     return reprErrs
 
 def calcPoseReprojectionRMSEThreshold(translationVec, rotationVec, camera, featureModel, showImg=False):
-    rotMat = R.from_rotvec(rotationVec).as_matrix()
+    rotMat = RoationWrapper(rotationVec).as_matrix()
 
     reprErrs = []
     pointsX = []

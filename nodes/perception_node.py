@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 Perception Node to run feature detection and estimation during docking.
 """
@@ -8,7 +8,7 @@ import time
 import cv2 as cv
 from cv_bridge import CvBridge, CvBridgeError
 import numpy as np
-from scipy.spatial.transform import Rotation
+from scipy.spatial.transform import Rotation as R
 import tf2_ros
 
 from tf.transformations import quaternion_from_euler, euler_from_quaternion
@@ -26,7 +26,28 @@ from sam_perception.perception import Perception
 from sam_perception.feature_model import FeatureModel
 from sam_perception.camera_model import Camera
 
+class RoationWrapper:
+    """
+    Wrapper class for the rotation, since in scipy 1.4, they changed from
+    as_dcm() to as_matrix(), but the function is the same.
+    """
+    def __init__(self, quat):
+        self.rot_mat = R.from_quat(quat)
 
+    def as_matrix(self):
+        return self.rot_mat.as_dcm()
+    
+class RotWrapFromDcm:
+    """
+    Wrapper class for the rotation, since in scipy 1.4, they changed from
+    from_dcm() to from_matrix(), but the function is the same.
+    """
+    def __init__(self, rotationVector):
+        self.rot_mat = R.from_dcm(rotationVector)
+
+    def as_quat(self):
+        return self.rot_mat.as_quat()
+    
 class PerceptionNode(object):
     """
     Node to interact with the perception algorithms.
@@ -163,7 +184,7 @@ class PerceptionNode(object):
                 transform.rotation.z,
                 transform.rotation.w)
 
-        rot_matrix = Rotation.from_quat(quat)
+        rot_matrix = RoationWrapper(quat)
         translation = np.array([[trans[0]],[trans[1]],
                                 [trans[2]]])
 
@@ -279,7 +300,7 @@ class PerceptionNode(object):
         """
         Pose msg to 4x4 numpy array.
         """
-        rot_matrix = Rotation.from_quat([pose.pose.orientation.x,
+        rot_matrix = RoationWrapper([pose.pose.orientation.x,
                                      pose.pose.orientation.y,
                                      pose.pose.orientation.z,
                                      pose.pose.orientation.w])
@@ -332,8 +353,8 @@ class PerceptionNode(object):
         Convert a matrix into a pose
         """
         # Get rotation and translation from matrix
-        R = Rotation.from_matrix(matrix[0:3,0:3])
-        quat = Rotation.as_quat(R)
+        # R = Rotation.from_matrix(matrix[0:3,0:3])
+        quat = RotWrapFromDcm(matrix[0:3,0:3]).as_quat()
         tran = matrix[0:3,3]
 
         pose = PoseWithCovarianceStamped()

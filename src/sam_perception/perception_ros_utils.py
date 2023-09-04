@@ -9,8 +9,19 @@ import yaml
 import os
 import rospkg
 
+class RoationWrapper:
+    """
+    Wrapper class for the rotation, since in scipy 1.4, they changed from
+    as_dcm() to as_matrix(), but the function is the same.
+    """
+    def __init__(self, rotationVector):
+        self.rot_mat = R.from_rotvec(rotationVector)
+
+    def as_matrix(self):
+        return self.rot_mat.as_dcm()
+
 def vectorToPose(frameID, translationVector, rotationVector, covariance, timeStamp=None):
-    rotMat = R.from_rotvec(rotationVector).as_matrix()
+    rotMat = RoationWrapper(rotationVector).as_matrix()
     rotMatHom = np.hstack((rotMat, np.zeros((3, 1))))
     rotMatHom = np.vstack((rotMatHom, np.array([0, 0, 0, 1])))
     q = quaternion_from_matrix(rotMatHom)
@@ -29,7 +40,7 @@ def vectorToPose(frameID, translationVector, rotationVector, covariance, timeSta
     return p
 
 def vectorToPoseStamped(frameID, translationVector, rotationVector, timeStamp=None):
-    rotMat = R.from_rotvec(rotationVector).as_matrix()
+    rotMat = RoationWrapper(rotationVector).as_matrix()
     rotMatHom = np.hstack((rotMat, np.zeros((3, 1))))
     rotMatHom = np.vstack((rotMatHom, np.array([0, 0, 0, 1])))
     q = quaternion_from_matrix(rotMatHom)
@@ -55,7 +66,7 @@ def vectorToTransform(frameID, childFrameID, translationVector, rotationVector, 
     t.transform.translation.y = translationVector[1]
     t.transform.translation.z = translationVector[2]
 
-    rotMat = R.from_rotvec(rotationVector).as_matrix()
+    rotMat = RoationWrapper(rotationVector).as_matrix()
     rotMatHom = np.hstack((rotMat, np.zeros((3, 1))))
     rotMatHom = np.vstack((rotMatHom, np.array([0, 0, 0, 1])))
     q = quaternion_from_matrix(rotMatHom)
