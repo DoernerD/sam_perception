@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from scipy.spatial.transform import Rotation as R
 import numpy as np
 import cv2 as cv
@@ -8,6 +10,7 @@ class Camera:
     def __init__(self, cameraMatrix, distCoeffs, projectionMatrix=None, resolution=None):
 
         self.cameraMatrix = np.ascontiguousarray(cameraMatrix[:,:3]) # due to some OpenCV issues in newer versions
+        # self.cameraMatrix = cameraMatrix # due to some OpenCV issues in newer versions
 
         self.distCoeffs = distCoeffs
         self.resolution = resolution # maybe change resolution to be (width, height) instead of (height, width)
