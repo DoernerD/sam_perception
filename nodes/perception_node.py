@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
 Perception Node to run feature detection and estimation during docking.
+To save computational power, we only run the perception on one image at a time. 
+Once we lose detection in one image, we switch to the next one.
 """
 
 import os
@@ -38,13 +40,19 @@ class PerceptionNode(object):
         self.hz = rospy.get_param("~hz")
         hats_mode = rospy.get_param("~hats_mode", "valley")
         self.base_frame = rospy.get_param("~base_frame", "sam/base_link")
-        self.camera_frame = rospy.get_param("~camera_frame", "camera_link")
+        self.port_camera_frame = rospy.get_param("~port_camera_frame", "camera_link")
+        self.forward_camera_frame = rospy.get_param("~forward_camera_frame", "camera_link")
+        self.starboard_camera_frame = rospy.get_param("~starboard_camera_frame", "camera_link")
 
         feature_model_yaml_path = os.path.join(rospkg.RosPack().get_path("sam_perception"),
                                                "feature_models/{}".format(feature_model_yaml))
         feature_model = FeatureModel.fromYaml(feature_model_yaml_path)
 
         self.camera = None
+        self.port_camera = None
+        self.forward_camera = None
+        self.starboard_camera = None
+
         self.image_msg = None
         self.bridge = CvBridge()
         self.camera_pose_vector = None  # This is some legacy code, needed, but stays none.
@@ -67,11 +75,18 @@ class PerceptionNode(object):
         self.pose_img = None
 
         # Initialize cameras. Has to be done before everything else.
-        self.camera_info_topic = rospy.get_param("~camera_info_topic")
-        self.camera_info_sub = rospy.Subscriber(self.camera_info_topic, CameraInfo,
-                                                self.camera_info_cb)
+        self.port_camera_info_topic = rospy.get_param("~port_camera_info_topic")
+        self.forward_camera_info_topic = rospy.get_param("~forward_camera_info_topic")
+        self.starboard_camera_info_topic = rospy.get_param("~starboard_camera_info_topic")
+        
+        self.port_camera_info_sub = rospy.Subscriber(self.port_camera_info_topic, CameraInfo,
+                                                self.port_camera_info_cb)
+        self.forward_camera_info_sub = rospy.Subscriber(self.forward_camera_info_topic, CameraInfo,
+                                                self.forward_camera_info_cb)
+        self.starboard_camera_info_sub = rospy.Subscriber(self.starboard_camera_info_topic, CameraInfo,
+                                                self.starboard_camera_info_cb)
 
-        while not rospy.is_shutdown() and self.camera is None:
+        while not rospy.is_shutdown() and self.forward_camera is None:
             print("Waiting for camera info to be published")
             rospy.sleep(1)
 
@@ -81,19 +96,46 @@ class PerceptionNode(object):
         tf_buffer = tf2_ros.Buffer()
         tf2_ros.TransformListener(tf_buffer)
 
+        self.base2camera_mat = []
+        # TODO: Put this in a function and call it for all three cameras.
         try:
             rospy.loginfo("Waiting for transforms")
-            base2camera_tf = tf_buffer.lookup_transform(self.base_frame, self.camera_frame,
+            port_base2camera_tf = tf_buffer.lookup_transform(self.base_frame, self.port_camera_frame,
                                                rospy.Time(0), rospy.Duration(60))
-            self.base2camera_mat = self.transform_to_matrix(base2camera_tf)
-            rospy.loginfo("[PN]: got transform %s to %s" % (self.base_frame, self.camera_frame))
+            self.port_base2camera_mat = self.transform_to_matrix(port_base2camera_tf)
+            rospy.loginfo("[PN]: got transform %s to %s" % (self.base_frame, self.port_camera_frame))
 
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             rospy.logerr("[PN]: Could not lookup transform %s to %s" 
-                         % (self.base_frame, self.camera_frame))
+                         % (self.base_frame, self.port_camera_frame))
+            
+        try:
+            rospy.loginfo("Waiting for transforms")
+            forward_base2camera_tf = tf_buffer.lookup_transform(self.base_frame, self.forward_camera_frame,
+                                               rospy.Time(0), rospy.Duration(60))
+            self.forward_base2camera_mat = self.transform_to_matrix(forward_base2camera_tf)
+            rospy.loginfo("[PN]: got transform %s to %s" % (self.base_frame, self.forward_camera_frame))
+
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            rospy.logerr("[PN]: Could not lookup transform %s to %s" 
+                         % (self.base_frame, self.forward_camera_frame))
+            
+        try:
+            rospy.loginfo("Waiting for transforms")
+            starboard_base2camera_tf = tf_buffer.lookup_transform(self.base_frame, self.starboard_camera_frame,
+                                               rospy.Time(0), rospy.Duration(60))
+            self.starboard_base2camera_mat = self.transform_to_matrix(starboard_base2camera_tf)
+            rospy.loginfo("[PN]: got transform %s to %s" % (self.base_frame, self.starboard_camera_frame))
+
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            rospy.logerr("[PN]: Could not lookup transform %s to %s" 
+                         % (self.base_frame, self.starboard_camera_frame))
 
         # Topics
-        self.image_topic = rospy.get_param("~image_topic")
+        self.port_image_topic = rospy.get_param("~port_image_topic")
+        self.forward_image_topic = rospy.get_param("~forward_image_topic")
+        self.starboard_image_topic = rospy.get_param("~starboard_image_topic")
+        
         self.image_processed_topic = rospy.get_param("~image_processed_topic")
         self.image_processed_drawing_topic = rospy.get_param("~image_processed_drawing_topic")
         self.image_pose_topic = rospy.get_param("~image_pose_topic")
@@ -103,7 +145,14 @@ class PerceptionNode(object):
         self.estimation_error_topic = rospy.get_param("~estimation_error_topic")
 
         # Subscribers
-        rospy.Subscriber(self.image_topic, Image, self.image_cb)
+        # start with front camera.
+        self.image_sub = rospy.Subscriber(self.forward_image_topic, Image, self.image_cb)
+        self.is_forward_image = True
+        self.is_port_image = False
+        self.is_starboard_image = False
+        self.camera = self.forward_camera
+        self.camera_frame_id = self.forward_camera_frame
+        self.base2camera_mat = self.forward_base2camera_mat
 
         # Publishers
         self.image_processed_pub = rospy.Publisher(self.image_processed_topic, Image, queue_size=1)
@@ -128,8 +177,9 @@ class PerceptionNode(object):
 
             rate.sleep()
 
+
     #region Callbacks
-    def camera_info_cb(self, msg):
+    def port_camera_info_cb(self, msg):
         """
         Use either K and D or just P
         https://answers.ros.org/question/119506/what-does-projection-matrix-provided-by-the-calibration-represent/
@@ -140,12 +190,50 @@ class PerceptionNode(object):
                         # distCoeffs=np.zeros((1,4), dtype=np.float32),
                         # resolution=(msg.height, msg.width))
         # Using K and D, we should subscribe to the raw image topic
-        self.camera = Camera(cameraMatrix=np.array(msg.K, dtype=np.float32).reshape((3,3)),
+        self.port_camera = Camera(cameraMatrix=np.array(msg.K, dtype=np.float32).reshape((3,3)),
                        distCoeffs=np.array(msg.D, dtype=np.float32),
                        resolution=(msg.height, msg.width))
 
         # We only want one message
-        self.camera_info_sub.unregister()
+        self.port_camera_info_sub.unregister()
+
+
+    def forward_camera_info_cb(self, msg):
+        """
+        Use either K and D or just P
+        https://answers.ros.org/question/119506/what-does-projection-matrix-provided-by-the-calibration-represent/
+        https://github.com/dimatura/ros_vimdoc/blob/master/doc/ros-camera-info.txt
+        """
+        # Using only P (D=0), we should subscribe to the rectified image topic
+        # camera = Camera(cameraMatrix=np.array(msg.P, dtype=np.float32).reshape((3,4))[:, :3],
+                        # distCoeffs=np.zeros((1,4), dtype=np.float32),
+                        # resolution=(msg.height, msg.width))
+        # Using K and D, we should subscribe to the raw image topic
+        self.forward_camera = Camera(cameraMatrix=np.array(msg.K, dtype=np.float32).reshape((3,3)),
+                       distCoeffs=np.array(msg.D, dtype=np.float32),
+                       resolution=(msg.height, msg.width))
+
+        # We only want one message
+        self.forward_camera_info_sub.unregister()
+
+
+    def starboard_camera_info_cb(self, msg):
+        """
+        Use either K and D or just P
+        https://answers.ros.org/question/119506/what-does-projection-matrix-provided-by-the-calibration-represent/
+        https://github.com/dimatura/ros_vimdoc/blob/master/doc/ros-camera-info.txt
+        """
+        # Using only P (D=0), we should subscribe to the rectified image topic
+        # camera = Camera(cameraMatrix=np.array(msg.P, dtype=np.float32).reshape((3,4))[:, :3],
+                        # distCoeffs=np.zeros((1,4), dtype=np.float32),
+                        # resolution=(msg.height, msg.width))
+        # Using K and D, we should subscribe to the raw image topic
+        self.starboard_camera = Camera(cameraMatrix=np.array(msg.K, dtype=np.float32).reshape((3,3)),
+                       distCoeffs=np.array(msg.D, dtype=np.float32),
+                       resolution=(msg.height, msg.width))
+
+        # We only want one message
+        self.starboard_camera_info_sub.unregister()
 
 
     def transform_to_matrix(self, transform):
@@ -187,6 +275,7 @@ class PerceptionNode(object):
         """
         Main loop for the perception node
         The if-statement is to ensure that we only run it when we have a new image.
+        We run all three images in a loop. If we don't get an image, we switch to the next one.
         """
         if self.got_image:
             try:
@@ -198,6 +287,37 @@ class PerceptionNode(object):
 
                 # TODO: Do the outlier rejection here. If it fails, set the pose_aquired flag to false.
                 self.transform_to_messages()
+        
+        if not self.pose_aquired:
+            # Switch to the next image.
+            # TODO: Put this in a function.
+            if self.is_forward_image:
+                rospy.loginfo("No forward image received. Switching to port image.")
+                self.image_sub.unregister()
+                self.image_sub = rospy.Subscriber(self.port_image_topic, Image, self.image_cb)
+                self.camera = self.port_camera
+                self.camera_frame_id = self.port_camera_frame
+                self.base2camera_mat = self.port_base2camera_mat
+                self.is_forward_image = False
+                self.is_port_image = True
+            elif self.is_port_image:
+                rospy.loginfo("No port image received. Switching to starboard image.")
+                self.image_sub.unregister()
+                self.image_sub = rospy.Subscriber(self.starboard_image_topic, Image, self.image_cb)
+                self.camera = self.starboard_camera
+                self.camera_frame_id = self.starboard_camera_frame
+                self.base2camera_mat = self.starboard_base2camera_mat
+                self.is_port_image = False
+                self.is_starboard_image = True
+            elif self.is_starboard_image:
+                rospy.loginfo("No starboard image received. Switching to forward image.")
+                self.image_sub.unregister()
+                self.image_sub = rospy.Subscriber(self.forward_image_topic, Image, self.image_cb)
+                self.camera = self.forward_camera
+                self.camera_frame_id = self.forward_camera_frame
+                self.base2camera_mat = self.forward_base2camera_mat
+                self.is_starboard_image = False
+                self.is_forward_image = True
 
         self.got_image = False
 
@@ -207,6 +327,8 @@ class PerceptionNode(object):
         Update step for the estimation
         NOTE: We don't compute the covariance of the pose right now. The functions are there,
         but for computational reasons, we skip that part. 
+        TODO: Fix that because we use the covariance for the mahalanobis distance in the
+        particle filter.
         """
         estimation_start = time.time()
 
@@ -298,6 +420,9 @@ class PerceptionNode(object):
         Express the docking station vector in sam/base_link frame.
         """
         # FIXME: Is this transformation right? Esp. with the base2cam?
+        # Check this since we now updated SAM description. Then we
+        # maybe don't need this whole function anymore.
+
         # Create rotation matrices and translation vectors
         R_ds_to_cam = tf_to_ds[0:3,0:3]
         t_ds_to_cam = tf_to_ds[0:3,3]
