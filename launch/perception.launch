@@ -30,9 +30,9 @@
     <param name="pose_feedback" value="$(arg pose_feedback)"/>
 
     <!-- TODO: Check how these topics are published on SAM and fix the value -->
-    <param name="port_camera_info_topic" value="$(arg camera_info_topic)"/>
-    <param name="forward_camera_info_topic" value="$(arg camera_info_topic)"/>
-    <param name="starboard_camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="port_camera_info_topic" value="/sam/payload/cam_port/camera_info"/>
+    <param name="forward_camera_info_topic" value="/sam/payload/cam_forward/camera_info"/>
+    <param name="starboard_camera_info_topic" value="/sam/payload/cam_starboard/camera_info"/>
 
     <param name="camera_pose_topic" value="$(arg camera_pose_topic)"/>
     <param name="image_processed_topic" value="$(arg image_processed_topic)"/>
@@ -43,9 +43,9 @@
     <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
     <param name="estimation_error_topic" value="$(arg estimation_error_topic)"/>
 
-    <param name="port_image_topic" value="/sam/payload/cam_port/image_decompressed"/>
+    <param name="port_image_topic" value="/sam/payload/cam_port/image_raw/compressed"/>
     <param name="forward_image_topic" value="/sam/payload/cam_forward/image_decompressed"/>
-    <param name="starboard_image_topic" value="/sam/payload/cam_starboard/image_decompressed"/>
+    <param name="starboard_image_topic" value="/sam/payload/cam_starboard/image_raw/compressed"/>
     
     <param name="port_camera_frame" value="sam/camera_front_left_link"/>
     <param name="forward_camera_frame" value="sam/camera_front_link"/>
