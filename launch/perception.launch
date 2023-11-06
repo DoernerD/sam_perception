@@ -9,8 +9,8 @@
   <arg name="sam" default="true"/>
 
   <!--Some parameters for the perception node-->
-  <!-- <arg name="feature_model_yaml" default="docking_station_2.yaml" /> -->
-  <arg name="feature_model_yaml" default="visual_docking_station.yaml" />
+  <arg name="feature_model_yaml" default="docking_station_2.yaml" /> 
+  <!--<arg name="feature_model_yaml" default="visual_docking_station.yaml" />-->
   <arg name="hats_mode" default="valley" /> <!--peak, valley or simple-->
   <arg name="camera_info_topic" default="camera_info" /> 
   <arg name="image_processed_topic" default="perception/image_processed" /> 
@@ -43,9 +43,9 @@
     <param name="estimated_poses_array_topic" value="$(arg estimated_poses_array_topic)"/>
     <param name="estimation_error_topic" value="$(arg estimation_error_topic)"/>
 
-    <param name="port_image_topic" value="/sam/payload/cam_port/image_raw/compressed"/>
-    <param name="forward_image_topic" value="/sam/payload/cam_forward/image_decompressed"/>
-    <param name="starboard_image_topic" value="/sam/payload/cam_starboard/image_raw/compressed"/>
+    <param name="port_image_topic" value="/sam/payload/cam_port/image_raw"/>
+    <param name="forward_image_topic" value="/sam/payload/cam_forward/image_raw"/>
+    <param name="starboard_image_topic" value="/sam/payload/cam_starboard/image_raw"/>
     
     <param name="port_camera_frame" value="sam/camera_front_left_link"/>
     <param name="forward_camera_frame" value="sam/camera_front_link"/>
