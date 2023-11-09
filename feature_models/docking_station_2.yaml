@@ -15,5 +15,5 @@ features: [[0, 0, -0.31], # Center.
            [0.24, -0.41, 0.0], # Top right.
            [0.24, 0.24, 0.0], # Botttom right.
            [-0.24, 0.24, 0.0]] # Bottom left.
-placement_uncertainty: 0.015 # default uncertainty will be used if 0 (check feature_model/FeatureModel)
+placement_uncertainty: 0.05 # default uncertainty will be used if 0 (check feature_model/FeatureModel)
 detection_tolerance: 0 # default uncertainty will be used if 0 (check feature_model/FeatureModel)
